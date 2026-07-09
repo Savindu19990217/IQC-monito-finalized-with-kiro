@@ -2,7 +2,7 @@
   "name": "IQC Pulse – Nawaloka Laboratory",
   "short_name": "IQC Pulse",
   "description": "Quality Control Monitor for Nawaloka Laboratory",
-  "start_url": "./index.html.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#F4F1EA",

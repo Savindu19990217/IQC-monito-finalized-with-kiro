@@ -524,6 +524,7 @@ select:focus,input:focus,textarea:focus{border-color:var(--teal);box-shadow:0 0 
     <div class="tab" id="at-issues" onclick="switchAdminTab('issues')">&#128681; Issues</div>
     <div class="tab" id="at-labreport" onclick="switchAdminTab('labreport')">&#127973; Lab Report</div>
     <div class="tab" id="at-params" onclick="switchAdminTab('params')">&#9881; Parameters</div>
+    <div class="tab" id="at-datamgmt" onclick="switchAdminTab('datamgmt')">&#128465; Data</div>
   </div>
   <div class="content">
 
@@ -661,11 +662,69 @@ select:focus,input:focus,textarea:focus{border-color:var(--teal);box-shadow:0 0 
           <button class="btn btn-primary btn-full" style="margin-top:14px;" onclick="saveLabParams()">&#10003; Save Parameters</button>
         </div>
       </div>
-    </div>
-  </div>
-</div>
+    </div><!-- end adm-params -->
 
-<!-- DETAIL VIEW -->
+    <!-- DATA MANAGEMENT TAB -->
+    <div id="adm-datamgmt" class="hidden">
+      <div class="card cp">
+        <div class="chd">
+          <div class="sbadge" style="background:var(--red)">&#128465;</div>
+          <div>
+            <div class="ctitle">Data Management</div>
+            <div class="csub">Permanently delete past submissions by lab and date range</div>
+          </div>
+        </div>
+        <div style="background:var(--red-l);border:1.5px solid rgba(192,57,43,.25);border-radius:var(--rsm);padding:10px 13px;font-size:12px;color:var(--red);margin-bottom:1rem;line-height:1.6;">
+          &#9888; Deleted data cannot be recovered. All images and records will be permanently removed from Firestore.
+        </div>
+        <div class="r2" style="margin-bottom:10px;">
+          <div>
+            <label class="fl">Laboratory</label>
+            <select id="del-lab-sel">
+              <option value="">-- All Labs --</option>
+              <option>Ragama</option><option>Kandy</option><option>Wennappuwa</option>
+              <option>Seeduwa</option><option>Anuradhapura</option><option>Batticaloa</option>
+              <option>Medawachchiya</option><option>Homagama</option><option>Galle</option><option>Matara</option>
+            </select>
+          </div>
+          <div>
+            <label class="fl">Date Range</label>
+            <select id="del-range-sel">
+              <option value="">-- Select Range --</option>
+              <option value="older30">Older than 30 days</option>
+              <option value="older60">Older than 60 days</option>
+              <option value="older90">Older than 90 days</option>
+              <option value="thismonth">This month only</option>
+              <option value="lastmonth">Last month only</option>
+              <option value="custom">Custom date range</option>
+            </select>
+          </div>
+        </div>
+        <div id="del-custom-range" style="display:none;" class="r2" style="margin-bottom:10px;">
+          <div><label class="fl">From Date</label><input type="date" id="del-from"></div>
+          <div><label class="fl">To Date</label><input type="date" id="del-to"></div>
+        </div>
+        <button class="btn btn-secondary btn-full" style="margin-bottom:10px;" onclick="previewDeletion()">&#128269; Preview matching records</button>
+        <div id="del-preview" style="display:none;">
+          <div id="del-preview-info" style="background:var(--cream2);border-radius:var(--rsm);padding:10px 13px;font-size:13px;margin-bottom:10px;line-height:1.7;"></div>
+          <div id="del-preview-list" style="max-height:260px;overflow-y:auto;margin-bottom:12px;"></div>
+          <button class="btn btn-danger btn-full" id="del-confirm-btn" onclick="confirmDeletion()">&#128465; Delete These Records Permanently</button>
+        </div>
+        <div id="del-progress" style="display:none;text-align:center;padding:1rem;">
+          <div class="spinner" style="margin:0 auto 10px;"></div>
+          <div id="del-progress-text" style="font-size:13px;color:var(--ink3);">Deleting...</div>
+        </div>
+      </div>
+
+      <!-- Storage usage summary -->
+      <div class="card cp" style="margin-top:0;">
+        <div class="chd"><div class="sbadge" style="background:var(--blue)">&#128202;</div><div class="ctitle">Submission Count by Lab</div></div>
+        <div id="del-stats" style="font-size:13px;color:var(--ink3);">Loading...</div>
+      </div>
+    </div>
+
+  </div><!-- end content -->
+</div><!-- end s-admin -->
 <div id="s-detail" class="screen">
   <div class="topbar">
     <div class="tb-brand">
@@ -854,7 +913,7 @@ function initLabTabState(){
 }
 
 function initAdminTabState(){
-  ['summary','review','issues','labreport','params'].forEach(function(x){
+  ['summary','review','issues','labreport','params','datamgmt'].forEach(function(x){
     var el=qs('adm-'+x);
     if(el){ if(x==='summary') el.classList.remove('hidden'); else el.classList.add('hidden'); }
     var tab=qs('at-'+x);
@@ -1361,7 +1420,7 @@ function submitLabComment(id){
 // ADMIN TABS
 // ═══════════════════════════════════════════
 function switchAdminTab(t){
-  ['summary','review','issues','labreport','params'].forEach(function(x){
+  ['summary','review','issues','labreport','params','datamgmt'].forEach(function(x){
     var el=qs('adm-'+x); if(el) el.classList.toggle('hidden',x!==t);
     var tab=qs('at-'+x); if(tab) tab.classList.toggle('active',x===t);
   });
@@ -1369,6 +1428,7 @@ function switchAdminTab(t){
   if(t==='issues'){ qs('iss-from').value=today(); qs('iss-to').value=today(); }
   if(t==='labreport'){ qs('lr-from').value=today(); qs('lr-to').value=today(); }
   if(t==='summary') renderAdminSummary();
+  if(t==='datamgmt') renderDelStats();
 }
 
 function initAdminDefaults(){
@@ -1982,7 +2042,184 @@ function closeDetail(){ showScreen(fromScreen); }
 
 </script>
 
-<!-- PWA: Service Worker Registration -->
+// ═══════════════════════════════════════════
+// DATA MANAGEMENT (ADMIN)
+// ═══════════════════════════════════════════
+
+// Show/hide custom date inputs
+document.addEventListener('DOMContentLoaded', function(){
+  var rangeEl = qs('del-range-sel');
+  if(rangeEl){
+    rangeEl.addEventListener('change', function(){
+      qs('del-custom-range').style.display = this.value === 'custom' ? 'grid' : 'none';
+    });
+  }
+});
+
+function getDelDateRange(){
+  var range = qs('del-range-sel').value;
+  var now = new Date();
+  var from, to;
+  if(range === 'older30'){
+    to = new Date(now); to.setDate(to.getDate()-30);
+    return {to: to.toISOString().slice(0,10), from: null};
+  } else if(range === 'older60'){
+    to = new Date(now); to.setDate(to.getDate()-60);
+    return {to: to.toISOString().slice(0,10), from: null};
+  } else if(range === 'older90'){
+    to = new Date(now); to.setDate(to.getDate()-90);
+    return {to: to.toISOString().slice(0,10), from: null};
+  } else if(range === 'thismonth'){
+    from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+    to = today();
+    return {from: from, to: to};
+  } else if(range === 'lastmonth'){
+    var lm = new Date(now.getFullYear(), now.getMonth()-1, 1);
+    var lme = new Date(now.getFullYear(), now.getMonth(), 0);
+    return {from: lm.toISOString().slice(0,10), to: lme.toISOString().slice(0,10)};
+  } else if(range === 'custom'){
+    return {from: qs('del-from').value, to: qs('del-to').value};
+  }
+  return null;
+}
+
+function getMatchingSubs(){
+  var lab = qs('del-lab-sel').value;
+  var dr = getDelDateRange();
+  if(!dr){ showToast('Please select a date range'); return null; }
+  return allSubs.filter(function(s){
+    if(lab && s.lab !== lab) return false;
+    if(dr.from && s.date < dr.from) return false;
+    if(dr.to && s.date > dr.to) return false;
+    return true;
+  });
+}
+
+function previewDeletion(){
+  var matches = getMatchingSubs();
+  if(!matches) return;
+  var previewEl = qs('del-preview');
+  var infoEl = qs('del-preview-info');
+  var listEl = qs('del-preview-list');
+
+  if(matches.length === 0){
+    infoEl.innerHTML = '<strong>No records found</strong> matching your filter.';
+    listEl.innerHTML = '';
+    qs('del-confirm-btn').style.display = 'none';
+    previewEl.style.display = 'block';
+    return;
+  }
+
+  // Group by lab
+  var byLab = {};
+  matches.forEach(function(s){
+    if(!byLab[s.lab]) byLab[s.lab] = 0;
+    byLab[s.lab]++;
+  });
+  var labSummary = Object.keys(byLab).map(function(l){ return '<strong>'+l+'</strong>: '+byLab[l]+' records'; }).join(' &nbsp;|&nbsp; ');
+
+  infoEl.innerHTML = '&#128269; Found <strong style="color:var(--red);">'+matches.length+' records</strong> to delete<br><span style="color:var(--ink3);font-size:12px;">'+labSummary+'</span>';
+
+  // List preview (max 30 shown)
+  var html = '<div style="font-size:12px;border:1px solid var(--border);border-radius:var(--rsm);overflow:hidden;">';
+  var show = matches.slice(0, 30);
+  show.forEach(function(s, i){
+    html += '<div style="display:flex;justify-content:space-between;padding:7px 10px;'+(i%2===0?'background:var(--cream)':'background:#fff')+';">'
+      +'<span style="color:var(--ink2);">'+s.lab+' &mdash; '+s.analyte+'</span>'
+      +'<span style="color:var(--ink3);">'+s.date+'</span>'
+      +'</div>';
+  });
+  if(matches.length > 30){
+    html += '<div style="padding:7px 10px;background:var(--amber-l);color:var(--amber);font-size:12px;">...and '+(matches.length-30)+' more records</div>';
+  }
+  html += '</div>';
+  listEl.innerHTML = html;
+  qs('del-confirm-btn').style.display = 'block';
+  previewEl.style.display = 'block';
+}
+
+function confirmDeletion(){
+  var matches = getMatchingSubs();
+  if(!matches || matches.length === 0) return;
+
+  var confirmText = 'DELETE ' + matches.length + ' records permanently?';
+  if(!window.confirm(confirmText + '\n\nThis cannot be undone.')) return;
+
+  // Hide preview, show progress
+  qs('del-preview').style.display = 'none';
+  qs('del-progress').style.display = 'block';
+
+  var total = matches.length;
+  var done = 0;
+  var errors = 0;
+
+  // Delete in batches of 20
+  function deleteBatch(items, cb){
+    if(items.length === 0){ cb(); return; }
+    var batch = db.batch();
+    var chunk = items.splice(0, 20);
+    chunk.forEach(function(s){
+      batch.delete(db.collection('submissions').doc(s.id));
+    });
+    batch.commit().then(function(){
+      done += chunk.length;
+      qs('del-progress-text').textContent = 'Deleting... ' + done + ' / ' + total;
+      deleteBatch(items, cb);
+    }).catch(function(e){
+      errors++;
+      done += chunk.length;
+      deleteBatch(items, cb);
+    });
+  }
+
+  deleteBatch(matches.slice(), function(){
+    qs('del-progress').style.display = 'none';
+    if(errors > 0){
+      showToast('Done with '+errors+' errors. '+done+' records processed.');
+    } else {
+      showToast('✓ '+done+' records deleted successfully');
+    }
+    renderDelStats();
+    // Reset UI
+    qs('del-lab-sel').value = '';
+    qs('del-range-sel').value = '';
+    qs('del-custom-range').style.display = 'none';
+  });
+}
+
+function renderDelStats(){
+  var el = qs('del-stats');
+  if(!el) return;
+  if(!allSubs || allSubs.length === 0){
+    el.innerHTML = '<div style="color:var(--ink3);font-size:13px;padding:6px 0;">No submissions in database.</div>';
+    return;
+  }
+  var byLab = {};
+  allSubs.forEach(function(s){
+    if(!byLab[s.lab]) byLab[s.lab] = {total:0, pending:0, reviewed:0};
+    byLab[s.lab].total++;
+    if(s.status === 'reviewed' || s.status === 'flagged') byLab[s.lab].reviewed++;
+    else byLab[s.lab].pending++;
+  });
+  var labs = Object.keys(byLab).sort();
+  var html = '<div class="tbl-wrap"><table class="hist-table"><thead><tr>'
+    +'<th>Lab</th><th>Total</th><th>Reviewed</th><th>Pending</th>'
+    +'</tr></thead><tbody>';
+  labs.forEach(function(l){
+    var d = byLab[l];
+    html += '<tr><td><strong>'+l+'</strong></td><td>'+d.total+'</td>'
+      +'<td style="color:var(--green);">'+d.reviewed+'</td>'
+      +'<td style="color:var(--amber);">'+d.pending+'</td></tr>';
+  });
+  html += '<tr style="font-weight:700;border-top:2px solid var(--border);">'
+    +'<td>Total</td><td>'+allSubs.length+'</td>'
+    +'<td style="color:var(--green);">'+allSubs.filter(function(s){return s.status==='reviewed'||s.status==='flagged';}).length+'</td>'
+    +'<td style="color:var(--amber);">'+allSubs.filter(function(s){return s.status==='pending';}).length+'</td></tr>';
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
