@@ -1829,10 +1829,18 @@ function buildPDFWindow(title, bodyHTML){
     +'tr:last-child td{border-bottom:none;}'
     +'.pill{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap;}'
     +'.p-sat{background:#DFF0E6;color:#1E6B3A;} .p-iss{background:#FAEAE8;color:#C0392B;} .p-mon{background:#FDF0DC;color:#A0620A;} .p-act{background:#EDE8F8;color:#6B3FA0;}'
-    +'.img-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}'
-    +'.img-grid img{width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid #EAE6DD;}'
-    +'.issue-card{border:1px solid #EAE6DD;border-radius:8px;padding:12px;margin-bottom:10px;page-break-inside:avoid;}'
+    +'.img-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px;}'
+    +'.img-grid img{width:100%;height:220px;object-fit:contain;border-radius:6px;border:1px solid #EAE6DD;background:#F4F1EA;}'
+    +'.img-grid.single img{height:320px;}'
+    +'.img-grid.three img:first-child{grid-column:span 2;height:260px;}'
+    +'.issue-card{border:1px solid #EAE6DD;border-radius:8px;padding:12px;margin-bottom:14px;page-break-inside:avoid;}'
     +'.issue-card.iss{border-left:3px solid #C0392B;}'
+    +'.issue-meta{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px;margin-bottom:8px;}'
+    +'.issue-meta-left strong{font-size:14px;}'
+    +'.issue-meta-detail{font-size:11px;color:#7A776F;margin-top:2px;}'
+    +'.issue-comments{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0;}'
+    +'.issue-comment-box{background:#F4F1EA;border-radius:5px;padding:7px 9px;font-size:11px;line-height:1.5;}'
+    +'.issue-comment-box .lbl{font-size:10px;font-weight:700;color:#7A776F;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;}'
     +'.footer{margin-top:32px;padding-top:14px;border-top:1px solid #EAE6DD;font-size:11px;color:#7A776F;text-align:center;}'
     +'.sign-section{margin-top:32px;display:grid;grid-template-columns:1fr 1fr;gap:24px;}'
     +'.sign-box{border-top:1px dashed #7A776F;padding-top:8px;font-size:11px;color:#7A776F;}'
@@ -1864,14 +1872,21 @@ function downloadIssuesPDF(){
   issues.forEach(function(s){
     var rs=getReviewStatus(s.fbStatus);
     var pillCls=s.fbStatus==='satisfactory'?'p-sat':s.fbStatus==='monitor'?'p-mon':s.fbStatus==='action'?'p-act':'p-iss';
+    var imgCount = s.photos && s.photos.length ? s.photos.length : 0;
+    var imgGridClass = imgCount === 1 ? 'img-grid single' : imgCount === 3 ? 'img-grid three' : 'img-grid';
     body+='<div class="issue-card iss">'
-      +'<div style="display:flex;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:4px;">'
-      +'<div><strong>'+s.analyte+'</strong> &nbsp;<span style="font-size:11px;color:#7A776F;">'+s.lab+' · '+s.date+'</span></div>'
+      +'<div class="issue-meta">'
+      +'<div class="issue-meta-left">'
+      +'<strong>'+s.analyte+'</strong>'
+      +'<div class="issue-meta-detail">'+s.lab+' &nbsp;·&nbsp; '+s.date+' &nbsp;·&nbsp; Machine: '+(s.machine||'—')+'</div>'
+      +'</div>'
       +(rs?'<span class="pill '+pillCls+'">'+rs.label+'</span>':'')
       +'</div>'
-      +(s.feedback?'<div style="font-size:12px;color:#3D3A34;margin-bottom:4px;">Reviewer comment: '+s.feedback+'</div>':'')
-      +(s.labComment?'<div style="font-size:12px;color:#1A4F8A;">Lab response: '+s.labComment+'</div>':'')
-      +(s.photos&&s.photos.length?'<div class="img-grid">'+s.photos.map(function(p){return '<img src="'+p+'">';}).join('')+'</div>':'')
+      +((s.feedback||s.labComment)?'<div class="issue-comments">'
+        +(s.feedback?'<div class="issue-comment-box"><div class="lbl">Reviewer comment</div>'+s.feedback+'</div>':'<div></div>')
+        +(s.labComment?'<div class="issue-comment-box" style="border-left:2px solid #1A4F8A;"><div class="lbl" style="color:#1A4F8A;">Lab response</div>'+s.labComment+'</div>':'<div></div>')
+        +'</div>':'')
+      +(imgCount?'<div class="'+imgGridClass+'">'+s.photos.map(function(p){return '<img src="'+p+'">';}).join('')+'</div>':'')
       +'</div>';
   });
   body+='<div class="footer">QAD Quality Control Monitor · Nawaloka Laboratory · Confidential</div>';
@@ -1912,17 +1927,28 @@ function downloadLabReportPDF(){
 
   var issueList=subs2.filter(function(s){return isIssue(s.fbStatus);});
   if(issueList.length){
-    body+='<div class="section-title">Issues Requiring Attention</div>';
+    body+='<div class="section-title">Issues Requiring Attention ('+issueList.length+')</div>';
     issueList.forEach(function(s){
       var rs=getReviewStatus(s.fbStatus);
       var pillCls=rs?(rs.key==='monitor'?'p-mon':rs.key==='action'?'p-act':'p-iss'):'p-iss';
+      var imgCount = s.photos && s.photos.length ? s.photos.length : 0;
+      var imgGridClass = imgCount === 1 ? 'img-grid single' : imgCount === 3 ? 'img-grid three' : 'img-grid';
       body+='<div class="issue-card iss">'
-        +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:6px;">'
-        +'<strong>'+s.analyte+'</strong><span style="font-size:11px;color:#7A776F;">'+s.date+'</span>'
-        +(rs?'<span class="pill '+pillCls+'">'+rs.label+'</span>':'')+'</div>'
-        +(s.feedback?'<p style="font-size:12px;margin-bottom:4px;">Reviewer: '+s.feedback+'</p>':'')
-        +(s.labComment?'<p style="font-size:12px;color:#1A4F8A;">Lab response: '+s.labComment+'</p>':'')
-        +(s.photos&&s.photos.length?'<div class="img-grid">'+s.photos.map(function(p){return '<img src="'+p+'">';}).join('')+'</div>':'')
+        // Header row: analyte + status pill
+        +'<div class="issue-meta">'
+        +'<div class="issue-meta-left">'
+        +'<strong>'+s.analyte+'</strong>'
+        +'<div class="issue-meta-detail">'+s.date+' &nbsp;·&nbsp; Machine: '+(s.machine||'—')+'&nbsp;·&nbsp; Category: '+(s.category||'—')+'</div>'
+        +'</div>'
+        +(rs?'<span class="pill '+pillCls+'">'+rs.label+'</span>':'')
+        +'</div>'
+        // Comments side by side
+        +((s.feedback||s.labComment)?'<div class="issue-comments">'
+          +(s.feedback?'<div class="issue-comment-box"><div class="lbl">Reviewer comment</div>'+s.feedback+'</div>':'<div></div>')
+          +(s.labComment?'<div class="issue-comment-box" style="border-left:2px solid #1A4F8A;"><div class="lbl" style="color:#1A4F8A;">Lab response</div>'+s.labComment+'</div>':'<div></div>')
+          +'</div>':'')
+        // Images — large grid
+        +(imgCount?'<div class="'+imgGridClass+'">'+s.photos.map(function(p){return '<img src="'+p+'">';}).join('')+'</div>':'')
         +'</div>';
     });
   }
